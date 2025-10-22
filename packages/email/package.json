@@ -6,10 +6,13 @@
     "build": "tsc"
   },
   "exports": {
-   ".": "./src/index.ts"
+    ".": "./src/index.ts"
   },
   "devDependencies": {
     "@workspace/typescript-config": "workspace:*",
     "typescript": "latest"
+  },
+  "dependencies": {
+    "resend": "^6.2.2"
   }
 }
