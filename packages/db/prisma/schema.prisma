@@ -1,0 +1,530 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                       String    @id @default(cuid())
+  firstName                String
+  lastName                 String
+  email                    String    @unique
+  isBan                    Boolean   @default(false)
+  isAdmin                  Boolean   @default(false)
+  password                 String // Remember to hash this before storing!
+  isActive                 Boolean   @default(true)
+  failedLoginAttempts      Int       @default(0)
+  isLocked                 Boolean   @default(false)
+  lockedAt                 DateTime?
+  lastFailedLoginAttemptAt DateTime?
+  lastLogin                DateTime?
+  dateJoined               DateTime? @default(now())
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  lastPasswordChangedAt     DateTime?
+  passwordChangeCount24H    Int       @default(0)
+  passwordChangeWindowStart DateTime?
+
+  roles                  UserRole[]
+  profile                UserProfile?
+  verifications          Verification[]
+  adminProfile           AdminProfile?
+  PasswordResetLog       PasswordResetLog[]
+  Enroll                 Enroll[]
+  UserExam               UserExam[]
+  StudentProfileToBranch StudentProfileToBranch?
+}
+
+model PasswordResetLog {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  createdAt DateTime @default(now())
+  method    String
+}
+
+model Role {
+  id        String      @id @default(cuid())
+  name      SystemRoles @unique // Role names should be unique
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  users UserRole[]
+}
+
+model UserRole {
+  id         String   @id @default(cuid())
+  userId     String
+  roleId     String
+  assignedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId], name: "user_role_unique_constraint")
+  @@index([userId])
+  @@index([roleId])
+}
+
+model UserProfile {
+  id                    String  @id @default(cuid())
+  userId                String  @unique
+  profilePictureUrl     String?
+  phoneNo               String? @unique
+  userName              String  @unique
+  // College students
+  collegeId             String?
+  collegeMail           String? @unique
+  isCollegeMailVerified Boolean @default(false)
+  passoutYear           Int?
+  branchId              String?
+  studentCourseId       String?
+
+  // School students
+  targetExams String[]
+  schoolId    String?
+  gradeLevel  String?
+
+  // Professional Details
+  professionalCompanyId String?
+  jobTitle              String?
+  yearsOfExperience     Int?
+  skills                String[]
+
+  interests String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  college             Company? @relation("CollegeProfiles", fields: [collegeId], references: [id], onDelete: SetNull)
+  branch              Branch?  @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  studentCourse       Course?  @relation("StudentCourses", fields: [studentCourseId], references: [id], onDelete: SetNull)
+  // school              Company? @relation("SchoolProfiles", fields: [schoolId], references: [id], onDelete: SetNull)
+  professionalCompany Company? @relation("ProfessionalCompanyProfiles", fields: [professionalCompanyId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([collegeId])
+  @@index([branchId])
+  @@index([studentCourseId])
+  @@index([schoolId])
+  @@index([professionalCompanyId])
+}
+
+model Verification {
+  id        String                @id @default(cuid())
+  type      VerificationTokenType
+  token     String                @unique
+  payload   String? // Consider Json for structured payloads: payload Json?
+  userId    String
+  otp       String
+  expiresAt DateTime
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type, expiresAt])
+  @@index([userId])
+}
+
+model AdminProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  employeeId  String?  @unique
+  joiningDate DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Company {
+  id          String      @id @default(cuid())
+  name        String
+  type        CompanyType
+  logoUrl     String
+  description String?
+  websiteUrl  String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  collegeStudentProfiles UserProfile[] @relation("CollegeProfiles")
+  // schoolStudentProfiles  UserProfile[] @relation("SchoolProfiles")
+  professionalProfiles   UserProfile[] @relation("ProfessionalCompanyProfiles")
+}
+
+model Course {
+  id        String      @id @default(cuid())
+  name      String
+  shortName String
+  type      Course_Type
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  studentProfiles        UserProfile[]            @relation("StudentCourses")
+  StudentProfileToBranch StudentProfileToBranch[]
+}
+
+model Branch {
+  id                     String                   @id @default(cuid())
+  name                   String
+  shortName              String
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  UserProfile            UserProfile[]
+  StudentProfileToBranch StudentProfileToBranch[]
+}
+
+model StudentProfileToBranch {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  branchId  String
+  courseId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, branchId, courseId])
+  @@index([userId])
+  @@index([branchId])
+}
+
+model Invitation {
+  id        String   @id @default(cuid())
+  firstName String
+  roleId    String
+  email     String   @unique
+  token     String   @unique
+  status    IStatus  @default(PENDING)
+  expiredAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model College {
+  id        String      @id @default(cuid())
+  name      String
+  shortName String
+  state     String
+  city      String
+  logo      String
+  domain    String
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  Classroom Classroom[]
+}
+
+model Exam {
+  id              String     @id @default(cuid())
+  name            String
+  description     String
+  type            EXAM_TYPES
+  isSetupComplete Boolean    @default(false)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  ExamDetails ExamDetails?
+  ExamSection ExamSection[]
+  UserExam    UserExam[]
+  Question    Question[]
+}
+
+model ExamDetails {
+  id                   String   @id @default(cuid())
+  examId               String   @unique
+  duration             Int
+  totalMarks           Int
+  totalQuestion        Int
+  isPrivate            Boolean  @default(false)
+  isPublished          Boolean  @default(false)
+  publishedAt          DateTime
+  availabilityStartsAt DateTime
+  availabilityEndsAt   DateTime
+
+  exam Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
+}
+
+model ExamSection {
+  id            String  @id @default(cuid())
+  name          String
+  description   String?
+  order         Int
+  durationInMin Int?
+  // marks                Int?
+
+  // order                Int          @default(0)
+  isStar           Boolean      @default(false)
+  questionSerialNo QSERIAL_TYPE @default(Number)
+  optionSerialNo   OSERIAL_TYPE @default(A)
+  isSkipable       Boolean      @default(false)
+  negativeMarks    Boolean      @default(false)
+  noOfQuestion     Int          @default(0)
+  totalMarks       Int          @default(0)
+  marksPerQuestion Float        @default(1)
+
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  type      E_QUESTION_TYPE @default(MCQ)
+  examId    String
+  exam      Exam            @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  Question Question[]
+}
+
+enum QSERIAL_TYPE {
+  Number
+  A
+  a
+  Roman
+}
+
+enum OSERIAL_TYPE {
+  A
+  a
+}
+
+model Question {
+  id            String  @id @default(cuid())
+  marks         Int     @default(1)
+  negativeMarks Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  examSectionId String
+  examSection   ExamSection @relation(fields: [examSectionId], references: [id], onDelete: Cascade)
+
+  examId String
+  exam   Exam   @relation(fields: [examId], references: [id])
+
+  McqDetail     McqDetail?
+  AudioTask     AudioTask?
+  SpeakingTask  SpeakingTask?
+  CodingProblem CodingProblem?
+  // Reading       Reading?
+  WritingText   WritingText?
+
+  // @@unique([examId, examSectionId])
+}
+
+model WritingText {
+  id         String   @id @default(cuid())
+  text       String
+  questionId String   @unique
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model McqDetail {
+  id         String    @id @default(cuid())
+  questionId String    @unique
+  title      String
+  question   Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  Options    Options[]
+}
+
+model Options {
+  id          String    @id @default(cuid())
+  text        String
+  // order       Int
+  mcqDeatilId String
+  isCorrect   Boolean   @default(false)
+  mcqDetail   McqDetail @relation(fields: [mcqDeatilId], references: [id], onDelete: Cascade)
+}
+
+model AudioTask {
+  id                String    @id @default(cuid())
+  questionId        String    @unique
+  audioUrl          String
+  correctTranscript String?
+  durationSeconds   Int?
+  audioQuestion     Question? @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}
+
+model SpeakingTask {
+  id                String    @id @default(cuid())
+  questionId        String    @unique
+  textToRead        String
+  languageCode      String?
+  referenceAudioUrl String?
+  speaking          Question? @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}
+
+model CodingProblem {
+  id               String           @id @default(cuid())
+  questionId       String           @unique
+  problemStatement String
+  inputFormat      String?
+  outputFormat     String?
+  constraints      String?
+  defaultCode      String?
+  codeing          Question?        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  allowedLanguages Language[]
+  CodingTestCase   CodingTestCase[]
+  Boilerplate      Boilerplate[]
+}
+
+model CodingTestCase {
+  id              String        @id @default(cuid())
+  codingProblemId String
+  input           String
+  expectedOutput  String
+  isSample        Boolean
+  isHidden        Boolean
+  points          Float
+  timeLimitMillis Int?
+  memoryLimitKB   Int?
+  problem         CodingProblem @relation(fields: [codingProblemId], references: [id], onDelete: Cascade)
+}
+
+model Boilerplate {
+  id        String        @id @default(cuid())
+  problemId String
+  language  Language
+  code      String
+  problem   CodingProblem @relation(fields: [problemId], references: [id])
+
+  @@unique([problemId, language])
+}
+
+model Classroom {
+  id          String  @id @default(cuid())
+  name        String
+  description String
+  logo        String?
+
+  collegeId String
+  college   College @relation(fields: [collegeId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  Enroll    Enroll[]
+}
+
+model Enroll {
+  id          String   @id @default(cuid())
+  classroomId String
+  userId      String
+  enrollAt    DateTime
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  classroom Classroom @relation(fields: [classroomId], references: [id], onDelete: Restrict)
+}
+
+model UserExam {
+  id                 String           @id @default(cuid())
+  userId             String
+  examId             String
+  status             USER_EXAM_STATUS
+  isAssignAt         DateTime?
+  isEnrolledAt       DateTime?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  evaluatedAt        DateTime?
+  timeTakenSeconds   DateTime?
+  totalScoreObtained Float?
+  collegeRank        Int?
+  overallRank        Int?
+  reminderSentAt     DateTime?
+  user               User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  exam               Exam             @relation(fields: [examId], references: [id], onDelete: Restrict)
+}
+
+model UserAnswer {
+  id String @id @default(cuid())
+}
+
+enum USER_EXAM_STATUS {
+  ENROLLED
+  ASSIGN
+  COMPLETED
+  MISSED
+  PENDING
+  NO_COMPLETED_AT_TIME
+}
+
+enum E_QUESTION_TYPE {
+  MCQ
+  READING
+  WRITTING
+  LISTENING
+  SPEAKING
+  CODEING
+}
+
+enum VerificationTokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+  PHONE_VERIFICATION
+}
+
+enum CompanyType {
+  SERVICE_BASE
+  PRODUCT_BASE
+  MARKETING
+  CONSULTING
+  ED_TECH
+}
+
+enum SystemRoles {
+  ADMIN
+  SUPER_ADMIN
+  USER
+  MODERATOR
+}
+
+enum EXAM_TYPES {
+  ASSESSMENT
+  EXAM
+}
+
+enum Course_Type {
+  MASTER
+  BACHELOR
+}
+
+enum Status {
+  PENDING
+  ACCEPTED
+  WRONG_ANSWER
+  TIME_LIMIT_EXCEEDED
+  MEMORY_LIMIT_EXCEEDED
+  COMPILATION_ERROR
+  RUNTIME_ERROR
+  PRESENTATION_ERROR
+}
+
+enum Language {
+  CPP
+  JAVA
+  C
+  PYTHON
+  TYPESCRIPT
+  JAVASCRIPT
+}
+
+enum IStatus {
+  PENDING
+  SUCCESSFUL
+  EXPIRED
+}
