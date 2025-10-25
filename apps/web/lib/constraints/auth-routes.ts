@@ -1,0 +1,1 @@
+export const authRoutes = ["/account-set-up", "/forgot", "/sign-in", "/verfication"];
